@@ -58,6 +58,38 @@ jobs:
           fi
           sleep 2 # Simulate time taken
 
+      - name: Example Action Using a Secret (Illustrative)
+        # INSECURE if the previous steps could compromise the runner,
+        # as this step runs in the same compromised environment.
+        uses: actions/github-script@v7 # Using a common action for illustration
+        with:
+          script: |
+            console.log("This step would hypothetically use a secret.");
+            // In a real scenario, a secret might be passed to an action like this:
+            // some-action --api-key ${{ secrets.SUPER_SECRET }}
+            if (process.env.SUPER_SECRET_ENV) {
+              console.log("Secret was available as an environment variable.");
+            } else {
+              console.log("Secret was not directly available as an env var here, but could be passed to 'uses' clauses.");
+            }
+        env:
+          # Secrets are typically not directly available as env vars unless explicitly mapped.
+          # This is more to illustrate the point.
+          SUPER_SECRET_ENV: ${{ secrets.SUPER_SECRET }} # Replace SUPER_SECRET with a real secret name for testing
+
+      - name: Example PR Commenting Action (Illustrative)
+        # This action would run after potentially malicious code if build.sh was harmful.
+        uses: actions/github-script@v7 # Using a common action for illustration
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Thank you for the PR! Build and test steps completed.'
+            })
+            console.log("Commented on PR (illustrative).");
 
       - name: Example of using PR data (potentially unsafely)
         env:
@@ -66,14 +98,7 @@ jobs:
         run: |
           echo "The PR title is: $PR_TITLE"
           echo "The PR number is: $PR_NUMBER"
-          # Directly using PR-controlled data in a command.
-          # If PR_TITLE was, for example, "foo; ls -la /" and not properly sanitized
-          # or if the command interpreter handled it in a specific way, this could be an issue.
-          # GitHub Actions often sanitizes direct env var expansion in `run` steps,
-          # but this pattern is what security tools might look for.
-          echo "Processing title: $PR_TITLE" > output_from_pr_title.txt
-          # A more direct (though often mitigated) example of potential injection:
-          # eval "echo User provided title: $PR_TITLE"
+          echo "Processing title: $PR_TITLE" > output_from_pr_title.txtE"
           touch report-${PR_NUMBER}.txt
           echo "Report for PR $PR_NUMBER with title '$PR_TITLE'" >> report-${PR_NUMBER}.txt
 
