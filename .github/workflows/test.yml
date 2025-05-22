@@ -1,0 +1,84 @@
+name: Test Workflow for Pwn Requests
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build_and_test: # Renamed job for realism
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js # Example: Setting up a language environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          # This is the critical part for this vulnerability pattern:
+          # Checking out the PR's head commit when the trigger is pull_request_target.
+          # The workflow runs with the permissions of the base repository (including secrets),
+          # but the code being checked out comes from the (potentially untrusted) PR.
+          ref: ${{ github.event.pull_request.head.sha }}
+          # If this checked-out code contains a malicious script that is subsequently run,
+          # it could exfiltrate secrets or perform other malicious actions.
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          yarn install
+          pip install -r requirements.txt
+          sleep 5 # Simulate time taken
+
+      - name: Lint Code
+        run: |
+          echo "Simulating linting process..."
+          npx eslint .
+          flake8 .
+          sleep 5 # Simulate time taken
+
+      - name: Run Unit Tests
+        run: |
+          npm test
+          pytest
+          sleep 10 # Simulate time taken
+
+      - name: Build Project
+        run: |
+          echo "Attempting to run build.sh from the PR..."
+          # This step now directly attempts to execute a script from the checked-out PR code.
+          # If ./build.sh is present in the PR and contains malicious commands,
+          # they will be executed with the workflow's permissions.
+          if [ -f ./build.sh ]; then
+            bash ./build.sh
+          else
+            echo "./build.sh not found. Skipping custom build script."
+            # You might want to add a fallback or error here if build.sh is expected
+          fi
+          sleep 2 # Simulate time taken
+
+
+      - name: Example of using PR data (potentially unsafely)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "The PR title is: $PR_TITLE"
+          echo "The PR number is: $PR_NUMBER"
+          # Directly using PR-controlled data in a command.
+          # If PR_TITLE was, for example, "foo; ls -la /" and not properly sanitized
+          # or if the command interpreter handled it in a specific way, this could be an issue.
+          # GitHub Actions often sanitizes direct env var expansion in `run` steps,
+          # but this pattern is what security tools might look for.
+          echo "Processing title: $PR_TITLE" > output_from_pr_title.txt
+          # A more direct (though often mitigated) example of potential injection:
+          # eval "echo User provided title: $PR_TITLE"
+          touch report-${PR_NUMBER}.txt
+          echo "Report for PR $PR_NUMBER with title '$PR_TITLE'" >> report-${PR_NUMBER}.txt
+
+      - name: Upload Artifact (Example)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report-${{ github.event.pull_request.number }}
+          path: report-${{ github.event.pull_request.number }}.txt
