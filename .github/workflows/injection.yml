@@ -1,0 +1,28 @@
+name: Code Injection Test
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set an unsafe variable
+        id: vars
+        run: echo "::set-output name=user_input::$(echo '${{ github.event.head_commit.message }}' | sed 's/%/%25/g' | sed 's/\r//g' | sed 's/\n//g')"
+
+      - name: Unsafe command execution
+        run: |
+          echo "Running with user input: ${{ steps.vars.outputs.user_input }}"
+          echo "::debug title=Debug Message::$((1+1))"
+          echo "::group title=Group::$((1+1))"
+          echo "::notice file=test.txt,line=1,col=1,title=Notice::$((1+1))"
+          echo "::warning file=test.txt,line=1,col=1,title=Warning::$((1+1))"
+          echo "::error file=test.txt,line=1,col=1,title=Error::$((1+1))"
+          echo "::set-env name=TEST_ENV::$((1+1))"
+          echo "::add-path::$((1+1))"
